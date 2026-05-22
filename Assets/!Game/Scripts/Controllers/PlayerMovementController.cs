@@ -21,6 +21,28 @@ public class PlayerMovementController : MonoBehaviour
     private bool _isGrounded;
     private bool _hitHead;
 
+    //Jump Variables
+    public float VerticalVelocity { get; private set; }
+    private bool _isJumping;
+    private bool _isFastFalling;
+    private bool _isFalling;
+    private float _fastFallTime;
+    private float _fastFallTimeReleaseSpeed;
+    private int _numberOfJumpsUsed;
+
+    //Apex Vars
+    private float _apexPoint;
+    private float _timePastApexThreshold;
+    private bool _isPastApexThreshold;
+
+    //Jump Buffer Vars
+    private float _jumpBufferTimer;
+    private bool _jumpReleasedDuringBuffer;
+
+    //Coyote Time Vars
+    private float _coyoteTimer;
+
+
     private void Awake()
     {
         //I don't know why we arent hardcoding this in the tutorial
@@ -29,12 +51,22 @@ public class PlayerMovementController : MonoBehaviour
         _rb = GetComponent<Rigidbody2D>();
     }
 
+    //For variable updating ONLY
+    //Physics calculations MUST be in fixed update
+    private void Update()
+    {
+        CountTimers();
+        //Checks are not physics based so we will do them in update
+        JumpChecks();
+    }
+
     //We use fixed update because physics and collisions can get weird if we are basing our updates on client side frame rates.
     //This makes it so slow and fast computers have the same physics
     private void FixedUpdate()
     {
         //We perform the check to use the right accel/decel
         CollisionChecks();
+        Jump();
 
         //Call movement depending on the player's grounded state
         if(_isGrounded)
@@ -119,6 +151,220 @@ public class PlayerMovementController : MonoBehaviour
 
     #endregion
 
+    #region Jump
+
+    private void JumpChecks()
+    {
+        //BUGS HERE
+        //What gets changed when jump button is pressed
+        if(CustomPlayerInputManager.JumpWasPressed)
+        {
+            _jumpBufferTimer = MoveVals.JumpBufferTime;
+            _jumpReleasedDuringBuffer = false;
+        }
+
+        //What gets changed when jump button is released
+        if (CustomPlayerInputManager.JumpWasReleased)
+        {
+            if(_jumpBufferTimer > 0)
+            {
+                _jumpReleasedDuringBuffer = true;
+            }
+
+            if (_isJumping && VerticalVelocity > 0f)
+            {
+                if (_isPastApexThreshold)
+                {
+                    _isPastApexThreshold = false;
+                    _isFastFalling = true;
+                    _fastFallTime = MoveVals.TimeForJumpCancel;
+                    VerticalVelocity = 0f;
+                }
+                else
+                {
+                    _isFastFalling = true;
+                    _fastFallTimeReleaseSpeed = VerticalVelocity;
+                }
+            }
+        }
+
+        //Initiate the jump
+        //First jump on ground or with coyote time
+        if (_jumpBufferTimer > 0 && !_isJumping && (_isGrounded || _coyoteTimer > 0))
+        {
+            InitiateJump(1);
+
+            //Bunny hop behavior
+            if (_jumpReleasedDuringBuffer)
+            {
+                _isFastFalling = true;
+                _fastFallTimeReleaseSpeed = VerticalVelocity;
+            }
+        }
+
+        //Double Jump Behavior
+        //With Coyote time
+        else if (_jumpBufferTimer > 0f && _isJumping && _numberOfJumpsUsed < MoveVals.JumpAmount)
+        {
+            _isFastFalling = false;
+            InitiateJump(1);
+        }
+
+        //Without Coyote time
+        //This just means we cant get 2 jumps after jumping off a ledge when we don't have coyote time
+        else if(_jumpBufferTimer > 0f && _isFalling && _numberOfJumpsUsed < MoveVals.JumpAmount - 1)
+        {
+            _isFastFalling = false;
+            InitiateJump(2);
+        }
+
+        //Landing behavior
+        if ((_isJumping || _isFalling) && _isGrounded && VerticalVelocity <= 0f)
+        {
+            _isJumping = false;
+            _isFalling = false;
+            _isFastFalling = false;
+            _fastFallTime = 0f;
+            _isPastApexThreshold = false;
+            _numberOfJumpsUsed = 0;
+
+            VerticalVelocity = Physics2D.gravity.y;
+            //VerticalVelocity = 0f;
+        }
+    }
+
+    private void InitiateJump(int numJumpsUsed)
+    {
+        if(!_isJumping)
+        {
+            _isJumping = true;
+        }
+
+        _jumpBufferTimer = 0f;
+        _numberOfJumpsUsed += numJumpsUsed;
+        VerticalVelocity = MoveVals.InitialJumpVelocity;
+    }
+
+    private void Jump()
+    {
+        //Apply jump gravity
+        if(_isJumping)
+        {
+            //Bonk
+            if(_hitHead)
+            {
+                //Interupt the jump when we bonk
+                _isFastFalling = true;
+            }
+
+            //Gravity on ascending portion of jump
+            if(VerticalVelocity >= 0f)
+            {
+                //This part just lets us control and sustain the peak of the jump
+
+                //Find where our apex point is 
+                _apexPoint = Mathf.InverseLerp(MoveVals.InitialJumpVelocity, 0f, VerticalVelocity);
+                Debug.Log(_apexPoint);
+
+                //Check that we are greater than our threshold
+                if(_apexPoint > MoveVals.ApexThreshold)
+                {
+                    if(!_isPastApexThreshold)
+                    {
+                        _isPastApexThreshold=true;
+                        _timePastApexThreshold = 0f;
+                    }
+
+                    if(_isPastApexThreshold)
+                    {
+                        _timePastApexThreshold += Time.fixedDeltaTime;
+                        if(_timePastApexThreshold < MoveVals.ApexHangTime)
+                        {
+                            VerticalVelocity = 0f;
+                        }
+                        else
+                        {
+                            VerticalVelocity = -0.01f;
+                        }
+                    }
+                }
+                //Gravity on ascending portion of jump but we arent past the apex
+                else
+                {
+                    VerticalVelocity += MoveVals.Gravity * Time.fixedDeltaTime;
+                    if (_isPastApexThreshold)
+                    {
+                        _isPastApexThreshold = false;
+                    }
+                }
+            }
+            //Gravity on descending portion of jump
+            else if (!_isFastFalling)
+            {
+                VerticalVelocity += MoveVals.Gravity * MoveVals.PlayerGravityOnReleaseMultiplier * Time.fixedDeltaTime;
+            }
+
+            else if (VerticalVelocity < 0f)
+            {
+                if (!_isFalling)
+                {
+                    _isFalling = true;
+                }
+            }
+        }
+        
+        //Jump Cut Logic
+        if(_isFastFalling)
+        {
+            if(_fastFallTime >= MoveVals.TimeForJumpCancel)
+            {
+                VerticalVelocity += MoveVals.Gravity * MoveVals.PlayerGravityOnReleaseMultiplier * Time.fixedDeltaTime;
+            }
+            else if(_fastFallTime < MoveVals.TimeForJumpCancel)
+            {
+                VerticalVelocity = Mathf.Lerp(_fastFallTimeReleaseSpeed, 0f, (_fastFallTime / MoveVals.TimeForJumpCancel));
+            }
+
+            _fastFallTime += Time.fixedDeltaTime;
+        }
+
+        //Normal Falling Gravity
+        if (!_isGrounded && !_isJumping)
+        {
+            if(!_isFalling)
+            {
+                _isFalling = true;
+            }
+
+            VerticalVelocity += MoveVals.Gravity * Time.fixedDeltaTime;
+        }
+
+        //Clamp Fall Speed when terminal velocity is reached and max ascension speed
+        VerticalVelocity = Mathf.Clamp(VerticalVelocity, -MoveVals.MaxFallSpeed, 50f);
+        _rb.linearVelocity = new Vector2(_rb.linearVelocityX, VerticalVelocity);
+    }
+
+    #endregion
+
+    #region Timers
+
+    private void CountTimers()
+    {
+        //Consider changing to fixed delta time maybe?
+        _jumpBufferTimer -= Time.deltaTime;
+
+        if(!_isGrounded)
+        {
+            _coyoteTimer -= Time.deltaTime;
+        }
+        else
+        {
+            _coyoteTimer = MoveVals.JumpCoyoteTime;
+        }
+    }
+
+    #endregion
+
     #region Collision Checks
 
     private void IsGrounded()
@@ -158,9 +404,49 @@ public class PlayerMovementController : MonoBehaviour
         #endregion
     }
 
+    private void HitHead()
+    {
+        Vector2 boxCastOrigin = new Vector2(_feetColl.bounds.center.x, _bodyColl.bounds.max.y);
+        Vector2 boxCastSize = new Vector2(_feetColl.bounds.size.x * MoveVals.HeadWidth, MoveVals.HeadDetectionRayLength);
+
+        //This scans above the players head and returns things we collide with on the designated "ground layer"
+        _headHit = Physics2D.BoxCast(boxCastOrigin, boxCastSize, 0f, Vector2.up, MoveVals.HeadDetectionRayLength, MoveVals.GroundLayer);
+        if (_headHit.collider != null)
+        {
+            _hitHead = true;
+        }
+        else
+        {
+            _hitHead = false;
+        }
+
+        #region Debug Visuals
+        //This just lets us view the ray cast we make for tuning purposes
+        if (MoveVals.DebugShowHeadHitBox)
+        {
+            float headWidth = MoveVals.HeadWidth;
+
+            Color rayColor;
+            if (_hitHead)
+            {
+                rayColor = Color.green;
+            }
+            else
+            {
+                rayColor = Color.red;
+            }
+
+            Debug.DrawRay(new Vector2(boxCastOrigin.x - boxCastSize.x / 2 * headWidth, boxCastOrigin.y), Vector2.up * MoveVals.HeadDetectionRayLength, rayColor);
+            Debug.DrawRay(new Vector2(boxCastOrigin.x + (boxCastSize.x / 2) * headWidth, boxCastOrigin.y), Vector2.up * MoveVals.HeadDetectionRayLength, rayColor);
+            Debug.DrawRay(new Vector2(boxCastOrigin.x - boxCastSize.x / 2 * headWidth, boxCastOrigin.y + MoveVals.HeadDetectionRayLength), Vector2.right * boxCastSize.x * headWidth, rayColor);
+        }
+        #endregion
+    }
+
     private void CollisionChecks()
     {
         IsGrounded();
+        HitHead();
     }
 
     #endregion
