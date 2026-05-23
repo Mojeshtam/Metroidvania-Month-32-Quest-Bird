@@ -243,6 +243,7 @@ public class PlayerMovementController : MonoBehaviour
         _jumpBufferTimer = 0f;
         _numberOfJumpsUsed += numJumpsUsed;
         VerticalVelocity = MoveVals.InitialJumpVelocity;
+        Debug.Log(_isGrounded);
     }
 
     private void Jump()
@@ -373,7 +374,7 @@ public class PlayerMovementController : MonoBehaviour
         Vector2 boxCastSize = new Vector2(_feetColl.bounds.size.x, MoveVals.GroundDetectionRayLength);
 
         //This scans beneath the players feet and returns things we collide with on the designated "ground layer"
-        _groundHit = Physics2D.BoxCast(boxCastOrigin, boxCastSize, 0f, Vector2.down, MoveVals.GroundDetectionRayLength, MoveVals.GroundLayer);
+        _groundHit = Physics2D.BoxCast(boxCastOrigin, boxCastSize, 0f, Vector2.down, MoveVals.GroundDetectionRayLength, LayerMask.GetMask("Ground"));
         if(_groundHit.collider != null)
         {
             _isGrounded = true;
