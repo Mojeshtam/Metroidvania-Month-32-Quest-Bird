@@ -243,7 +243,6 @@ public class PlayerMovementController : MonoBehaviour
         _jumpBufferTimer = 0f;
         _numberOfJumpsUsed += numJumpsUsed;
         VerticalVelocity = MoveVals.InitialJumpVelocity;
-        Debug.Log(_isGrounded);
     }
 
     private void Jump()
@@ -265,7 +264,6 @@ public class PlayerMovementController : MonoBehaviour
 
                 //Find where our apex point is 
                 _apexPoint = Mathf.InverseLerp(MoveVals.InitialJumpVelocity, 0f, VerticalVelocity);
-                Debug.Log(_apexPoint);
 
                 //Check that we are greater than our threshold
                 if(_apexPoint > MoveVals.ApexThreshold)
