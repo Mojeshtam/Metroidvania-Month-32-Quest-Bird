@@ -1316,9 +1316,21 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4253975389444804415, guid: 43aa98fa9d0abbf4caa5bff6298afa64, type: 3}
+      propertyPath: m_IsTrigger
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5294975942185389634, guid: 43aa98fa9d0abbf4caa5bff6298afa64, type: 3}
       propertyPath: m_Name
       value: DamnBird (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 7189492990472367096, guid: 43aa98fa9d0abbf4caa5bff6298afa64, type: 3}
+      propertyPath: hopCooldown
+      value: 0.2
+      objectReference: {fileID: 0}
+    - target: {fileID: 9177996676181124731, guid: 43aa98fa9d0abbf4caa5bff6298afa64, type: 3}
+      propertyPath: m_Mass
+      value: 2
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
